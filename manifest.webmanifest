@@ -1,0 +1,11 @@
+{
+  "name":"40 Günlük Aile Zikir ve Dua",
+  "short_name":"Zikir40",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#07101b",
+  "theme_color":"#07101b",
+  "description":"40 günlük zikir, dua, sayaç ve takip uygulaması.",
+  "icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
