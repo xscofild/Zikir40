@@ -8,6 +8,7 @@ on:
       - 'sw.js'
       - 'manifest.webmanifest'
       - 'icon.svg'
+      - '.github/workflows/validate-app.yml'
 
 permissions:
   contents: read
