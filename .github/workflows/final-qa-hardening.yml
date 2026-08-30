@@ -1,0 +1,78 @@
+name: Final QA hardening
+
+on:
+  push:
+    paths:
+      - '.github/workflows/final-qa-hardening.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply QA fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+
+          # Stable local YYYY-MM-DD independent of browser locale quirks.
+          old="const dateKey=(d=new Date())=>d.toLocaleDateString('en-CA');"
+          new="const dateKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;"
+          if old not in s: raise SystemExit('dateKey not found')
+          s=s.replace(old,new,1)
+
+          # Calendar status must include prayer tracking too.
+          old="function dayStatus(k){if(k>dateKey())return 0;let s=state(k);let done=ITEMS.filter(x=>(s.counts[x.id]||0)>=x.target).length;let auto=(done===ITEMS.length&&s.family)?2:(done>0||s.family)?1:0;return Math.max(auto,s.manual||0)}"
+          new="function dayStatus(k){if(k>dateKey())return 0;let s=state(k);let done=ITEMS.filter(x=>(s.counts[x.id]||0)>=x.target).length,prayerYes=PRAYERS.filter(n=>s.prayers[n]==='yes').length,prayerTouched=PRAYERS.some(n=>s.prayers[n]==='yes'||s.prayers[n]==='no');let auto=(done===ITEMS.length&&s.family&&prayerYes===PRAYERS.length)?2:(done>0||s.family||prayerTouched)?1:0;return Math.max(auto,s.manual||0)}"
+          if old not in s: raise SystemExit('dayStatus not found')
+          s=s.replace(old,new,1)
+
+          # Explicit button semantics and accessibility; preserve toggle behavior.
+          old='<button class="yes ${v===\'yes\'?\'on\':\'\'}" data-prayer="${n}" data-v="yes">Kıldım</button><button class="no ${v===\'no\'?\'on\':\'\'}" data-prayer="${n}" data-v="no">Kılmadım</button>'
+          new='<button type="button" aria-pressed="${v===\'yes\'}" class="yes ${v===\'yes\'?\'on\':\'\'}" data-prayer="${n}" data-v="yes">Kıldım</button><button type="button" aria-pressed="${v===\'no\'}" class="no ${v===\'no\'?\'on\':\'\'}" data-prayer="${n}" data-v="no">Kılmadım</button>'
+          if old not in s: raise SystemExit('prayer buttons not found')
+          s=s.replace(old,new,1)
+
+          # Visible build version makes stale PWA immediately obvious during QA.
+          s=s.replace("networkEl.textContent=off?'Çevrimdışı • tüm veriler cihazda':'Çevrimiçi • çevrimdışı kullanım hazır'","networkEl.textContent=off?'Çevrimdışı • tüm veriler cihazda • v16':'Çevrimiçi • çevrimdışı kullanım hazır • v16'",1)
+          s=s.replace("register('./sw.js?v=15'","register('./sw.js?v=16'",1)
+          p.write_text(s,encoding='utf-8')
+
+          sw=Path('sw.js')
+          t=sw.read_text(encoding='utf-8').replace('zikir40-v15','zikir40-v16')
+          sw.write_text(t,encoding='utf-8')
+          PY
+      - name: Static QA
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          js=re.findall(r'<script>(.*?)</script>',s,re.S)[-1]
+          Path('/tmp/app.js').write_text(js,encoding='utf-8')
+          checks=[
+            "ps[key]=ps[key]===val?'':val",
+            "filter='Bugün'",
+            "const groups=['Bugün','Tümü','Sabah','Esma','Akşam','Dua','Takvim']",
+            "dir==='next'&&calendarPage>=maxPage",
+            "future?'disabled aria-disabled=\"true\"'",
+            "prayerYes===PRAYERS.length",
+            "v16"
+          ]
+          missing=[x for x in checks if x not in s]
+          if missing: raise SystemExit('Missing QA invariants: '+repr(missing))
+          PY
+          node --check /tmp/app.js
+          node --check sw.js
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "QA harden prayer toggles, dates and calendar status [skip ci]"
+          git push
