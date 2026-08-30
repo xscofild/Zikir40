@@ -14,8 +14,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate patch script
+        run: python3 -m py_compile .github/scripts/fix_tabs_audit.py
       - name: Apply tab, prayer toggle and audit fixes
         run: python3 .github/scripts/fix_tabs_audit.py
+      - name: Audit generated app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script>(.*?)</script>',s,re.S)
+          if not scripts:
+              raise SystemExit('main script not found')
+          Path('/tmp/zikir40-app.js').write_text(scripts[-1],encoding='utf-8')
+          ids=re.findall(r'\bid="([^"]+)"',s)
+          dup=sorted({x for x in ids if ids.count(x)>1})
+          if dup:
+              raise SystemExit('duplicate HTML ids: '+', '.join(dup))
+          required=['Bugün','Sabah','Esma','Akşam','Dua','Takvim','renderPrayers','renderCalendar','applyView']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('missing app markers: '+', '.join(missing))
+          print('HTML structural audit passed')
+          PY
+          node --check /tmp/zikir40-app.js
+          node --check sw.js
       - name: Commit audited app
         run: |
           git config user.name "github-actions[bot]"
