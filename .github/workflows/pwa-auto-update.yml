@@ -1,0 +1,47 @@
+name: PWA auto update
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pwa-auto-update.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Improve installed iPhone app updates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old="if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js?v=14').then(r=>r.update()).catch(()=>{})}"
+          new="if('serviceWorker'in navigator){let reloading=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloading)return;reloading=true;location.reload()});navigator.serviceWorker.register('./sw.js?v=15',{updateViaCache:'none'}).then(r=>{r.update();addEventListener('pageshow',()=>r.update());document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')r.update()})}).catch(()=>{})}"
+          if old not in s: raise SystemExit('service worker registration marker not found')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          sw=Path('sw.js')
+          t=sw.read_text(encoding='utf-8').replace("zikir40-v14","zikir40-v15")
+          sw.write_text(t,encoding='utf-8')
+          PY
+      - name: Validate JS
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          Path('/tmp/app.js').write_text(re.findall(r'<script>(.*?)</script>',s,re.S)[-1],encoding='utf-8')
+          PY
+          node --check /tmp/app.js
+          node --check sw.js
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Improve automatic PWA updates on iPhone [skip ci]"
+          git push
