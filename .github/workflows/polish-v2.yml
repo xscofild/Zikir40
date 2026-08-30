@@ -28,10 +28,10 @@ jobs:
           if not scripts:
               raise SystemExit('main script not found')
           Path('/tmp/zikir40-app.js').write_text(scripts[-1],encoding='utf-8')
-          ids=re.findall(r'\bid="([^"]+)"',s)
+          ids=[x for x in re.findall(r'\bid="([^"]+)"',s) if '$' not in x and '{' not in x]
           dup=sorted({x for x in ids if ids.count(x)>1})
           if dup:
-              raise SystemExit('duplicate HTML ids: '+', '.join(dup))
+              raise SystemExit('duplicate static HTML ids: '+', '.join(dup))
           required=['Bugün','Sabah','Esma','Akşam','Dua','Takvim','renderPrayers','renderCalendar','applyView']
           missing=[x for x in required if x not in s]
           if missing:
