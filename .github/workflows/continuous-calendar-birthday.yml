@@ -1,0 +1,98 @@
+name: Continuous calendar and family birthday reminders
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/continuous-calendar-birthday.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upgrade continuous day counter, calendar pages and birthday reminders
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+
+          # App is now an ongoing family routine, not a one-off 40-day title.
+          s=s.replace('🌿 40 Günlük Aile Zikir ve Dua','🌿 Aile Zikir ve Dua')
+          s=s.replace('<span>devam günü</span>','<span>toplam gün</span>',1)
+          s=s.replace('<span>gün</span></div><div class="stat"><b id="pct">','<span>ilk dönem</span></div><div class="stat"><b id="pct">',1)
+
+          # Calendar paging + birthday reminder styles.
+          css='''.calendar-toolbar{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center;margin:12px 0}.calendar-nav-btn{height:46px;border:1px solid var(--line);border-radius:13px;background:#162338;color:#fff;font-size:24px;font-weight:900;touch-action:manipulation}.calendar-nav-btn:disabled{opacity:.28}.calendar-range{text-align:center}.calendar-range b{display:block;color:#fff;font-size:15px}.calendar-range span{display:block;color:var(--muted);font-size:12px;margin-top:2px}.calendar-caption{color:#9fe5b6;font-size:12px;font-weight:750;margin:5px 0}.family-reminder{display:none;margin:12px 0;padding:15px;border-radius:19px;border:1px solid rgba(246,200,94,.52);background:linear-gradient(135deg,#2e2514,#151d2b);box-shadow:0 12px 28px rgba(0,0,0,.18)}.family-reminder.show{display:block}.family-reminder.today{border-color:rgba(72,213,127,.62);background:linear-gradient(135deg,#103220,#111d2a)}.family-reminder .family-kicker{font-size:12px;font-weight:850;letter-spacing:.07em;text-transform:uppercase;color:var(--gold)}.family-reminder .family-title{font-size:19px;font-weight:900;margin:6px 0}.family-reminder .family-text{color:#dce5f1;line-height:1.5}.family-reminder .family-date{font-size:12px;color:var(--muted);margin-top:7px}'''
+          s=s.replace('.quick-actions{display:grid;',css+'.quick-actions{display:grid;',1)
+
+          # Birthday banner right below the daily Islamic reminder.
+          s=s.replace('<section id="dailyWord" class="daily-word"></section>', '<section id="dailyWord" class="daily-word"></section>\n<section id="familyReminder" class="family-reminder"></section>',1)
+
+          # Replace fixed first-40 calendar with a continuous 40-day window navigator.
+          old='<section id="calendarPanel" class="panel"><h2>📅 İlk 40 Gün Takvimi</h2><div id="challengeStatus" class="continue-note"></div><div class="muted">Bir güne dokun: boş → kısmi → tamamlandı. Böylece yaptığın günleri kendin işaretleyebilirsin.</div><div id="calendar" class="calendar"></div></section>'
+          new='''<section id="calendarPanel" class="panel"><h2 id="calendarTitle">📅 Devam Takvimi</h2><div id="challengeStatus" class="continue-note"></div><div class="calendar-toolbar"><button class="calendar-nav-btn" data-cal="prev" aria-label="Önceki 40 gün">‹</button><div id="calendarRange" class="calendar-range"></div><button class="calendar-nav-btn" data-cal="next" aria-label="Sonraki 40 gün">›</button></div><div class="muted">Günler artık kesilmez: 1, 2, 3… 40, 41, 42… diye devam eder. Bir güne dokun: boş → kısmi → tamamlandı.</div><div id="calendar" class="calendar"></div><div class="calendar-toolbar"><button class="calendar-nav-btn" data-cal="prev" aria-label="Önceki 40 gün">‹</button><div class="calendar-range"><b id="calendarBottomRange"></b><span>40 günlük görünüm</span></div><button class="calendar-nav-btn" data-cal="next" aria-label="Sonraki 40 gün">›</button></div></section>'''
+          if old not in s:
+              raise SystemExit('calendar panel markup not found')
+          s=s.replace(old,new,1)
+
+          # Robust day count across daylight-saving changes. Today 2026-08-30 = day 41.
+          pat=r"const totalDay=\(\)=>Math\.max\(1,Math\.floor\(\(new Date\(\)-START\)/86400000\)\+1\);const currentDay=\(\)=>Math\.min\(DAYS,totalDay\(\)\);"
+          repl="const START_UTC=Date.UTC(2026,6,21);const totalDay=()=>{let n=new Date();return Math.max(1,Math.floor((Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())-START_UTC)/86400000)+1)};const currentDay=()=>Math.min(DAYS,totalDay());let calendarPage=Math.max(0,Math.floor((totalDay()-1)/40));"
+          s,n=re.subn(pat,repl,s,count=1)
+          if n!=1:
+              raise SystemExit('totalDay formula not found')
+
+          # Annual family birthdays. Start with the birthday explicitly supplied by the family.
+          insert="const FAMILY_BIRTHDAYS=[{name:'Maral',dob:'1994-08-13'}];\n"
+          marker="const PRAYERS=['Sabah','Öğle','İkindi','Akşam','Yatsı'];"
+          if marker not in s:
+              raise SystemExit('PRAYERS marker not found')
+          s=s.replace(marker,insert+marker,1)
+
+          # Birthday reminder: day before + birthday day, recurring every year.
+          birthday_fn=r'''function renderFamilyReminder(){let el=$('#familyReminder'),now=new Date(),mm=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0'),md=`${mm}-${dd}`;let tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1),tmd=`${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;let today=FAMILY_BIRTHDAYS.find(x=>x.dob.slice(5)===md),next=FAMILY_BIRTHDAYS.find(x=>x.dob.slice(5)===tmd);el.className='family-reminder';if(today){let age=now.getFullYear()-Number(today.dob.slice(0,4));el.classList.add('show','today');el.innerHTML=`<div class="family-kicker">🎉 Bugün aile günü</div><div class="family-title">Bugün ${today.name}’ın doğum günü!</div><div class="family-text">Allah sağlık, afiyet, hayırlı ve bereketli bir ömür nasip etsin. Bugün aramayı, yazmayı ve güzel bir dua etmeyi unutmayın. 🤲</div><div class="family-date">13 Ağustos • ${age}. yaş</div>`;return}if(next){el.classList.add('show');el.innerHTML=`<div class="family-kicker">🎁 Yarın unutma</div><div class="family-title">Yarın ${next.name}’ın doğum günü</div><div class="family-text">Bugünden hatırla: mesajını, aramanı veya hediyeni hazırla. Yarın kimse unutmasın.</div><div class="family-date">13 Ağustos • Doğum: 13.08.1994</div>`;return}el.innerHTML=''}
+'''
+          marker='function renderDailyWord(){'
+          if marker not in s:
+              raise SystemExit('renderDailyWord marker not found')
+          s=s.replace(marker,birthday_fn+marker,1)
+
+          # Replace fixed 1-40 calendar renderer with page-based absolute day numbers.
+          pat=r"function renderCalendar\(\)\{.*?\}function updateStats\(\)\{"
+          new_render=r'''function renderCalendar(){let today=dateKey(),startIndex=calendarPage*40,startNo=startIndex+1,endNo=startNo+39,startDate=dayDate(startIndex),endDate=dayDate(startIndex+39);$('#calendarTitle').textContent=calendarPage===0?'📅 Başlangıç Takvimi':'📅 Devam Takvimi';$('#calendarRange').innerHTML=`<b>${startNo}–${endNo}. günler</b><span>${startDate.toLocaleDateString('tr-TR')} – ${endDate.toLocaleDateString('tr-TR')}</span>`;$('#calendarBottomRange').textContent=`${startNo}–${endNo}. günler`;$('#challengeStatus').textContent=`Bugün başlangıçtan beri ${totalDay()}. gün. Şu anda ${startNo}–${endNo}. günleri görüyorsun.`;$('#calendar').innerHTML=Array.from({length:40},(_,i)=>{let absoluteIndex=startIndex+i,d=dayDate(absoluteIndex),k=dateKey(d),st=dayStatus(k),future=absoluteIndex+1>totalDay();return `<button class="day ${st===2?'done':st===1?'partial':''} ${k===today?'today':''} ${future?'future':''}" data-day="${k}"><b>${absoluteIndex+1}. gün</b>${d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'})}<br>${st===2?'✓ Tamam':st===1?'◐ Kısmi':'○ Boş'}</button>`}).join('');document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{let x=state(b.dataset.day);x.manual=((x.manual||0)+1)%3;save();renderCalendar();updateStats()});document.querySelectorAll('[data-cal]').forEach(b=>{b.disabled=b.dataset.cal==='prev'&&calendarPage===0;b.onclick=()=>{if(b.dataset.cal==='prev'){calendarPage=Math.max(0,calendarPage-1)}else{calendarPage++}renderCalendar();document.querySelector('#calendarPanel').scrollIntoView({behavior:'smooth',block:'start'})}})}function updateStats(){'''
+          s,n=re.subn(pat,new_render,s,count=1,flags=re.S)
+          if n!=1:
+              raise SystemExit('renderCalendar function not found')
+
+          # Header: show continuous absolute day number instead of "devam 1".
+          s=s.replace("$('#completedDays').textContent=Math.max(0,totalDay()-40);$('#dayNo').textContent=(totalDay()>=40?'40/40':totalDay()+'/40');", "$('#completedDays').textContent=totalDay();$('#dayNo').textContent=(totalDay()>=40?'40/40':totalDay()+'/40');",1)
+          old="let d=currentDay();$('#dates').textContent=totalDay()<=40?`21.07.2026–29.08.2026 • Bugün ${d}. gün`:`21.07.2026–29.08.2026 • İlk 40 gün tamamlandı • Devam ${totalDay()-40}. gün`;$('#challengeStatus').textContent=totalDay()>40?`✅ 40 günlük ilk dönem tamamlandı. Bugün devam serisinin ${totalDay()-40}. günü.`:`İlk 40 günlük dönemin ${d}. günü.`;"
+          new="let d=currentDay();$('#dates').textContent=totalDay()<=40?`21.07.2026’dan beri • Bugün ${totalDay()}. gün`:`21.07.2026’dan beri • İlk 40 gün tamamlandı • Bugün ${totalDay()}. gün`;"
+          if old not in s:
+              raise SystemExit('header dates marker not found')
+          s=s.replace(old,new,1)
+
+          # Render birthday banner with the rest of the dashboard.
+          s=s.replace("renderDailyWord();renderPrayers();renderIslamicExtras();updateStats()", "renderDailyWord();renderFamilyReminder();renderPrayers();renderIslamicExtras();updateStats()",1)
+
+          # Service worker version bump.
+          s=s.replace("register('./sw.js?v=10')", "register('./sw.js?v=11')",1)
+          p.write_text(s,encoding='utf-8')
+
+          sw=Path('sw.js').read_text(encoding='utf-8').replace('zikir40-v10','zikir40-v11')
+          Path('sw.js').write_text(sw,encoding='utf-8')
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Add endless day calendar and Maral birthday reminders [skip ci]"
+          git push
