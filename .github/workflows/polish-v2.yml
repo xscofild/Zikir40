@@ -1,4 +1,4 @@
-name: Apply Zikir40 app patch
+name: Apply Zikir40 audited UI patch
 
 on:
   workflow_dispatch:
@@ -14,12 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply continuous calendar and birthday patch
-        run: python3 .github/scripts/continuous_calendar_birthday.py
-      - name: Commit patched app
+      - name: Apply tab, prayer toggle and audit fixes
+        run: python3 .github/scripts/fix_tabs_audit.py
+      - name: Commit audited app
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html sw.js
-          git diff --cached --quiet || git commit -m "Add endless calendar and family birthday reminders [skip ci]"
+          git diff --cached --quiet || git commit -m "Fix tabs, prayer toggles and daily dashboard [skip ci]"
           git push
