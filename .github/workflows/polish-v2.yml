@@ -1,4 +1,4 @@
-name: Polish sticky header and offline behavior
+name: Apply Zikir40 app patch
 
 on:
   workflow_dispatch:
@@ -10,61 +10,16 @@ permissions:
   contents: write
 
 jobs:
-  polish:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply polish
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-
-          s=s.replace('<meta name="apple-mobile-web-app-capable" content="yes">', '<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="Zikir40">',1)
-          s=s.replace('.wrap{max-width:780px;margin:auto;padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 88px)}', '.wrap{max-width:780px;margin:auto;padding:0 14px calc(env(safe-area-inset-bottom) + 88px)}',1)
-          s=s.replace('.app-header{position:sticky;top:0;z-index:20;', '.app-header{position:sticky;top:0;z-index:20;',1)
-          s=s.replace('.hero{padding:2px 2px 10px}', '.hero{padding:2px 2px 10px;transition:padding .18s}.app-header.compact{padding-top:calc(env(safe-area-inset-top) + 5px);box-shadow:0 8px 24px rgba(0,0,0,.28)}.app-header.compact .hero{padding:0 2px 5px}.app-header.compact .hero h1{font-size:17px;margin:0}.app-header.compact #dates,.app-header.compact .stats,.app-header.compact #network{display:none}.app-header.compact .bar{height:5px;margin-top:6px}.app-header.compact .nav{padding-top:3px}',1)
-          s=s.replace('.hidden{display:none}@media', '.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.quick-actions button{min-height:46px}.hidden-file{display:none}.hidden{display:none}@media',1)
-
-          s=s.replace('<section id="calendarPanel"', '<div class="quick-actions"><button class="primary" id="completeAll">✓ Bugünün hepsini tamamla</button><button class="ghost" id="topBtn">↑ Yukarı çık</button></div>\n<section id="calendarPanel"',1)
-          s=s.replace('<button class="ghost" id="export">Yedek indir</button><button class="ghost danger" id="resetDay">Bugünü sıfırla</button>', '<button class="ghost" id="export">Yedek indir</button><button class="ghost" id="importBtn">Yedek yükle</button><input class="hidden-file" type="file" id="importFile" accept="application/json"><button class="ghost danger" id="resetDay">Bugünü sıfırla</button>',1)
-
-          s=s.replace("let store=JSON.parse(localStorage.getItem(KEY)||'{}');", "let store={};try{store=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){store={}}",1)
-
-          old="function dayStatus(k){let s=state(k);let done=ITEMS.filter(x=>(s.counts[x.id]||0)>=x.target).length;let auto=done===ITEMS.length?2:done>0?1:0;return Math.max(auto,s.manual||0)}"
-          new="function dayStatus(k){let s=state(k);let done=ITEMS.filter(x=>(s.counts[x.id]||0)>=x.target).length;let auto=(done===ITEMS.length&&s.family)?2:(done>0||s.family)?1:0;return Math.max(auto,s.manual||0)}"
-          if old not in s: raise SystemExit('dayStatus not found')
-          s=s.replace(old,new,1)
-
-          old="p=Math.round(ITEMS.reduce((sum,x)=>sum+Math.min((st.counts[x.id]||0)/x.target,1),0)/ITEMS.length*100);"
-          new="p=Math.round((ITEMS.reduce((sum,x)=>sum+Math.min((st.counts[x.id]||0)/x.target,1),0)+(st.family?1:0))/(ITEMS.length+1)*100);"
-          if old not in s: raise SystemExit('progress formula not found')
-          s=s.replace(old,new,1)
-
-          s=s.replace("$('#familyText').textContent=FAMILY_DUA;document.title=`${$('#pct').textContent} • Zikir40`;$('#familyDone')", "$('#familyText').textContent=FAMILY_DUA;$('#familyDone')",1)
-          s=s.replace("$('#dayNo').textContent=currentDay()+'/40'}", "$('#dayNo').textContent=currentDay()+'/40';document.title=p+'% • Zikir40'}",1)
-
-          end="$('#export').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(store,null,2)],{type:'application/json'}));a.download='zikir40-yedek.json';a.click()};render();"
-          replacement="$('#export').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(store,null,2)],{type:'application/json'}));a.download='zikir40-yedek.json';a.click()};$('#completeAll').onclick=()=>{if(confirm('Bugünün bütün zikirleri ve aile duası tamamlandı olarak işaretlensin mi?')){let s=state();ITEMS.forEach(x=>s.counts[x.id]=x.target);s.family=true;save();render()}};$('#topBtn').onclick=()=>scrollTo({top:0,behavior:'smooth'});$('#importBtn').onclick=()=>$('#importFile').click();$('#importFile').onchange=e=>{let f=e.target.files?.[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let data=JSON.parse(r.result);if(!data||typeof data!=='object')throw Error();if(confirm('Mevcut ilerleme yedekteki verilerle değiştirilsin mi?')){store=data;save();render()}}catch{alert('Bu dosya geçerli bir Zikir40 yedeği değil.')}};r.readAsText(f)};render();"
-          if end not in s: raise SystemExit('export tail not found')
-          s=s.replace(end,replacement,1)
-
-          s=s.replace("setNetwork();if(!navigator.standalone)", "setNetwork();let ticking=false;function compactHeader(){if(!ticking){requestAnimationFrame(()=>{$('.app-header').classList.toggle('compact',scrollY>55);ticking=false});ticking=true}}addEventListener('scroll',compactHeader,{passive:true});compactHeader();if(!navigator.standalone)",1)
-          s=s.replace("register('./sw.js?v=8')", "register('./sw.js?v=9')",1)
-          p.write_text(s,encoding='utf-8')
-
-          Path('sw.js').write_text("""const CACHE='zikir40-v9';
-          const CORE=['./','./index.html','./manifest.webmanifest','./icon.svg'];
-          self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
-          self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-          self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==location.origin)return;if(e.request.mode==='navigate'){e.respondWith(caches.match('./index.html').then(cached=>{const fresh=fetch(e.request).then(r=>{if(r.ok)caches.open(CACHE).then(c=>c.put('./index.html',r.clone()));return r}).catch(()=>cached);return cached||fresh}));return}e.respondWith(caches.match(e.request).then(cached=>{const fresh=fetch(e.request).then(r=>{if(r.ok)caches.open(CACHE).then(c=>c.put(e.request,r.clone()));return r}).catch(()=>cached);return cached||fresh}))});
-          """,encoding='utf-8')
-          PY
-      - name: Commit polish
+      - name: Apply continuous calendar and birthday patch
+        run: python3 .github/scripts/continuous_calendar_birthday.py
+      - name: Commit patched app
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html sw.js
-          git diff --cached --quiet || git commit -m "Polish compact sticky header, progress and offline mode [skip ci]"
+          git diff --cached --quiet || git commit -m "Add endless calendar and family birthday reminders [skip ci]"
           git push
