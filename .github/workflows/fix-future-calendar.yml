@@ -1,0 +1,67 @@
+name: Fix future calendar days
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-future-calendar.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disable future days and clear accidental future marks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+
+          old=".day.future{opacity:.5}"
+          new=".day.future{opacity:.35;cursor:not-allowed;pointer-events:none}.day.future b{color:var(--muted)}"
+          if old not in s: raise SystemExit('future CSS marker not found')
+          s=s.replace(old,new,1)
+
+          old="function dayStatus(k){let s=state(k);"
+          new="function dayStatus(k){if(k>dateKey())return 0;let s=state(k);"
+          if old not in s: raise SystemExit('dayStatus marker not found')
+          s=s.replace(old,new,1)
+
+          old='return `<button class="day ${st===2?\'done\':st===1?\'partial\':\'\'} ${k===today?\'today\':\'\'} ${future?\'future\':\'\'}" data-day="${k}"><b>${absoluteIndex+1}. gün</b>${d.toLocaleDateString(\'tr-TR\',{day:\'2-digit\',month:\'2-digit\'})}<br>${st===2?\'✓ Tamam\':st===1?\'◐ Kısmi\':\'○ Boş\'}</button>`'
+          new='return `<button class="day ${st===2?\'done\':st===1?\'partial\':\'\'} ${k===today?\'today\':\'\'} ${future?\'future\':\'\'}" ${future?\'disabled aria-disabled="true"\':`data-day="${k}"`}><b>${absoluteIndex+1}. gün</b>${d.toLocaleDateString(\'tr-TR\',{day:\'2-digit\',month:\'2-digit\'})}<br>${st===2?\'✓ Tamam\':st===1?\'◐ Kısmi\':\'○ Boş\'}</button>`'
+          if old not in s: raise SystemExit('calendar button marker not found')
+          s=s.replace(old,new,1)
+
+          old="document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{let x=state(b.dataset.day);"
+          new="document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{if(b.disabled||b.dataset.day>dateKey())return;let x=state(b.dataset.day);"
+          if old not in s: raise SystemExit('calendar click handler marker not found')
+          s=s.replace(old,new,1)
+
+          s=s.replace("register('./sw.js?v=12')","register('./sw.js?v=13')",1)
+          p.write_text(s,encoding='utf-8')
+
+          sw=Path('sw.js')
+          t=sw.read_text(encoding='utf-8').replace('zikir40-v12','zikir40-v13')
+          sw.write_text(t,encoding='utf-8')
+          PY
+      - name: Validate JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script>(.*?)</script>',s,re.S)
+          Path('/tmp/app.js').write_text(scripts[-1],encoding='utf-8')
+          PY
+          node --check /tmp/app.js
+          node --check sw.js
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Disable future calendar days [skip ci]"
+          git push
