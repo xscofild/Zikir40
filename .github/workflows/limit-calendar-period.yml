@@ -1,0 +1,49 @@
+name: Limit calendar period to today
+
+on:
+  push:
+    paths:
+      - '.github/workflows/limit-calendar-period.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prevent browsing future 40-day periods
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old="function bindCalendarNav(){document.querySelectorAll('[data-cal],[data-cycle]').forEach(b=>{let dir=b.dataset.cal||b.dataset.cycle;b.disabled=dir==='prev'&&calendarPage===0;b.onclick=()=>{calendarPage=dir==='prev'?Math.max(0,calendarPage-1):calendarPage+1;renderCalendar();renderCycleNav();if(b.dataset.cal)document.querySelector('#calendarPanel').scrollIntoView({behavior:'smooth',block:'start'})}})}"
+          new="function bindCalendarNav(){let maxPage=Math.max(0,Math.floor((totalDay()-1)/40));calendarPage=Math.min(calendarPage,maxPage);document.querySelectorAll('[data-cal],[data-cycle]').forEach(b=>{let dir=b.dataset.cal||b.dataset.cycle;b.disabled=(dir==='prev'&&calendarPage===0)||(dir==='next'&&calendarPage>=maxPage);b.onclick=()=>{if((dir==='prev'&&calendarPage===0)||(dir==='next'&&calendarPage>=maxPage))return;calendarPage=dir==='prev'?Math.max(0,calendarPage-1):Math.min(maxPage,calendarPage+1);renderCalendar();renderCycleNav();if(b.dataset.cal)document.querySelector('#calendarPanel').scrollIntoView({behavior:'smooth',block:'start'})}})}"
+          if old not in s: raise SystemExit('calendar navigation function not found')
+          s=s.replace(old,new,1)
+          s=s.replace("register('./sw.js?v=13')","register('./sw.js?v=14')",1)
+          p.write_text(s,encoding='utf-8')
+          sw=Path('sw.js')
+          t=sw.read_text(encoding='utf-8').replace('zikir40-v13','zikir40-v14')
+          sw.write_text(t,encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script>(.*?)</script>',s,re.S)
+          Path('/tmp/app.js').write_text(scripts[-1],encoding='utf-8')
+          PY
+          node --check /tmp/app.js
+          node --check sw.js
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Limit calendar navigation to current period [skip ci]"
+          git push
