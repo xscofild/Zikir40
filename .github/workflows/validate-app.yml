@@ -1,0 +1,47 @@
+name: Validate Zikir40 app
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'icon.svg'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check HTML and JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script>(.*?)</script>',s,re.S)
+          if not scripts:
+              raise SystemExit('main script not found')
+          Path('/tmp/zikir40-app.js').write_text(scripts[-1],encoding='utf-8')
+          ids=[x for x in re.findall(r'\bid="([^"]+)"',s) if '$' not in x and '{' not in x]
+          dup=sorted({x for x in ids if ids.count(x)>1})
+          if dup:
+              raise SystemExit('duplicate static HTML ids: '+', '.join(dup))
+          required=['Bugün','Tümü','Sabah','Esma','Akşam','Dua','Takvim','renderPrayers','renderCalendar','applyView','renderIslamicExtras','renderFamilyReminder']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('missing app markers: '+', '.join(missing))
+          print('HTML structural audit passed')
+          PY
+          node --check /tmp/zikir40-app.js
+          node --check sw.js
+      - name: Check offline assets
+        run: |
+          test -f manifest.webmanifest
+          test -f icon.svg
+          grep -q "zikir40-v12" sw.js
+          echo "Offline asset audit passed"
