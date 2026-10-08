@@ -1,6 +1,6 @@
 {
-  "name": "WunderBank – Banking Demo",
-  "short_name": "WunderBank",
+  "name": "East Bank – Banking Demo",
+  "short_name": "East Bank DEMO",
   "description": "Spielerische Banking-Demo. Fiktives Geld, keine echten Bankkonten.",
   "start_url": "./",
   "scope": "./",
