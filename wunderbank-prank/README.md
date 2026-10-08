@@ -1,6 +1,6 @@
 # WunderBank — Fictional Banking Demo (PWA)
 
-A **fictional**, phone-first banking simulator with a clean interface inspired by common European mobile banking interaction patterns. It does **not** imitate the identity of a real financial institution, accept credentials, or access bank accounts. Amounts, merchants, dates, and transactions are deliberately fabricated. The screens include persistent demo labels.
+A **fictional**, phone-first banking simulator with compact mobile layout, native-feeling navigation, detailed statement rows, and responsive account visuals with a clean interface inspired by common European mobile banking interaction patterns. It does **not** imitate the identity of a real financial institution, accept credentials, or access bank accounts. Amounts, merchants, dates, and transactions are deliberately fabricated. The screens include persistent demo labels.
 
 ## Features
 - Five functional bottom tabs: Overview, Transfer, Invest, Products, Services.

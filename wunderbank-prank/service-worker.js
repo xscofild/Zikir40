@@ -1,4 +1,4 @@
-const VERSION = 'wunderbank-v2.0.0';
+const VERSION = 'wunderbank-v2.1.0';
 const STATIC = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icons/icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
