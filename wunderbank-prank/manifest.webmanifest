@@ -1,0 +1,16 @@
+{
+  "name": "WunderBank – Prank Simulator",
+  "short_name": "WunderBank",
+  "description": "Spielerische Banking-Demo. Fiktives Geld, keine echten Bankkonten.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fc",
+  "theme_color": "#101a44",
+  "orientation": "portrait",
+  "lang": "de",
+  "icons": [
+    {"src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"},
+    {"src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
