@@ -1,63 +1,15 @@
-/** Dependency-free logic smoke tests. Run: node tests/smoke.cjs */
 'use strict';
-const fs=require('node:fs');
-const vm=require('node:vm');
-const assert=require('node:assert/strict');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../app.js'),'utf8');
-const memory=new Map();
-
-function boot(){
-  let handler;
-  const app={innerHTML:'',addEventListener:(type,fn)=>{if(type==='click')handler=fn;}};
-  const toast={innerHTML:'',classList:{add(){},remove(){}}};
-  const confetti={replaceChildren(){},appendChild(){}};
-  const document={
-    querySelector(selector){return {'#app':app,'#toast':toast,'#confetti':confetti}[selector]||null;},
-    addEventListener(){},createElement(){return {className:'',style:{}};},body:{contains(){return true;}}
-  };
-  const context={
-    document, Intl, Date, console, Math, performance:{now:()=>0},
-    location:{protocol:'file:'}, navigator:{},
-    window:{matchMedia:()=>({matches:true})},
-    localStorage:{getItem:(key)=>memory.get(key)??null,setItem:(key,value)=>memory.set(key,value)},
-    setTimeout:()=>0,clearTimeout:()=>{},requestAnimationFrame:()=>{}
-  };
-  vm.runInNewContext(source,context);
-  return {
-    get html(){return app.innerHTML;},
-    get toast(){return toast.innerHTML;},
-    click(action, dataset={}){
-      const target={dataset:{...dataset,action}, disabled:false,
-        classList:{contains:()=>false},closest(){return this;}};
-      handler({target});
-    }
-  };
-}
-let ui=boot();
-assert.match(ui.html,/FIKTIVE DEMO/);
-assert.match(ui.html,/624,80/);
-assert.doesNotMatch(ui.html,/Millionär-Modus an!/);
-ui.click('reveal');
-assert.match(ui.html,/8\.889\.513,68/);
-assert.match(ui.html,/Millionär-Modus an!/);
-ui.click('switch-tab',{tab:'activity'});
-assert.match(ui.html,/Universum der Wünsche/);
-assert.match(ui.html,/8\.888\.888,88/);
-ui.click('detail',{id:'bonus'});
-assert.match(ui.html,/Fiktive Buchung\. Kein Nachweis/);
-ui.click('close-sheet');
-ui.click('switch-tab',{tab:'cards'});
-assert.match(ui.html,/DEMO · NOT A PAYMENT CARD/);
-ui.click('switch-tab',{tab:'settings'});
-ui.click('preset',{amount:'99999999.99'});
-ui.click('switch-tab',{tab:'home'});
-assert.match(ui.html,/8\.889\.513,68/, 'changing next preset must not alter already credited balance');
-ui.click('switch-tab',{tab:'settings'});
-ui.click('reset');
-assert.match(ui.html,/624,80/);
-ui.click('reveal');
-assert.match(ui.html,/100\.000\.624,79/);
-ui=boot();
-assert.match(ui.html,/100\.000\.624,79/, 'refresh must preserve saved state');
-assert.match(ui.html,/KEINE ECHTE BANK/);
-console.log('PASS: 12 smoke checks — balance, simulated credit, transactions, details, card, settings, reset, persistence, disclosures');
+const fs=require('node:fs');const vm=require('node:vm');const assert=require('node:assert/strict');const path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');const memory=new Map();
+function boot(){let handler;const app={innerHTML:'',addEventListener:(event,fn)=>{if(event==='click')handler=fn;}};const toast={textContent:'',classList:{add(){},remove(){}}};
+const doc={querySelector(selector){return {'#app':app,'#toast':toast}[selector]||null;},addEventListener(){}};
+vm.runInNewContext(source,{document:doc,localStorage:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)},window:{scrollTo(){}},navigator:{},location:{protocol:'file:'},Intl,Date,console,Math,setTimeout:()=>0});
+return{get html(){return app.innerHTML;},click(action,data={}){const target={dataset:{action,...data},disabled:false,classList:{contains:()=>false},closest(){return this}};handler({target})}};}
+let ui=boot();assert.match(ui.html,/WunderBank/);assert.match(ui.html,/333,34/);assert.match(ui.html,/FIKTIVE BANK/);assert.match(ui.html,/Accounts/);
+ui.click('account');assert.match(ui.html,/AktivKonto/);assert.match(ui.html,/Current transactions/);assert.match(ui.html,/30 days/);ui.click('range',{range:'90'});assert.match(ui.html,/90 days/);
+ui.click('transaction',{id:'t1'});assert.match(ui.html,/Simuliert · nicht echt/);ui.click('close-modal');
+ui.click('tab',{tab:'services'});assert.match(ui.html,/Demo studio/);ui.click('preset',{amount:'1000000'});ui.click('credit');assert.match(ui.html,/1\.000\.333,34/);assert.match(ui.html,/Demogutschrift/);assert.match(ui.html,/Simulierter Zahlungseingang/);
+ui=boot();assert.match(ui.html,/1\.000\.333,34/, 'balance persists after reload');ui.click('tab',{tab:'services'});assert.match(ui.html,/Gutschrift bereits simuliert/);ui.click('reset');assert.match(ui.html,/333,34/);assert.doesNotMatch(ui.html,/1\.000\.333,34/);
+ui.click('tab',{tab:'transfer'});assert.match(ui.html,/SEPA transfer/);ui.click('transfer-info');assert.match(ui.html,/Nur Demo/);
+ui.click('tab',{tab:'invest'});assert.match(ui.html,/No investment product/);ui.click('tab',{tab:'products'});assert.match(ui.html,/Card products/);
+console.log('PASS: 21 banking-demo checks — balance, UI sections, history, transaction details, currency, credit, persistence, reset, static functions');
